@@ -42,37 +42,8 @@ def get_log_events(client, log_group_name, log_stream_name):
         if response['nextForwardToken'] == prev_token:
             break
 
-
-def main():
-    """メインメソッド"""
-
+def retrieve_events(region, log_group, log_stream):
     try:
-        # 引数定義
-        arg_parser = argparse.ArgumentParser()
-        arg_parser.add_argument(
-            '-r',
-            '--region',
-            metavar='REGION',
-            default='ap-northeast-1',
-            help='リージョンを指定する（デフォルト：ap-northeast-1）'
-        )
-        arg_parser.add_argument(
-            'log_group',
-            metavar='LOG_GROUP',
-            help='ロググループ名を指定する'
-        )
-        arg_parser.add_argument(
-            'log_stream',
-            metavar='LOG_STREAM',
-            help='ログストリーム名を指定する'
-        )
-
-        # 引数取得
-        args = arg_parser.parse_args()
-        region = args.region
-        log_group = args.log_group
-        log_stream = args.log_stream
-
         # ファイル名に使用できない文字を置換
         replaced_log_stream = re.sub('[\\/:*?"<>|]', '_', log_stream)
 
@@ -98,6 +69,38 @@ def main():
 
     except Exception as e:
         traceback.print_exc()
+
+def main():
+    """メインメソッド"""
+    # 引数定義
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument(
+        '-r',
+        '--region',
+        metavar='REGION',
+        default='ap-northeast-1',
+        help='リージョンを指定する（デフォルト：ap-northeast-1）'
+    )
+    arg_parser.add_argument(
+        'log_group',
+        metavar='LOG_GROUP',
+        help='ロググループ名を指定する'
+    )
+    arg_parser.add_argument(
+        'log_stream',
+        metavar='LOG_STREAM',
+        help='ログストリーム名を指定する'
+    )
+
+    # 引数取得
+    args = arg_parser.parse_args()
+    region = args.region
+    log_group = args.log_group
+    log_stream = args.log_stream
+
+    retrieve_events(region, log_group, log_stream)
+
+
 
 
 if __name__ == '__main__':
