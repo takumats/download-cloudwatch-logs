@@ -17,10 +17,14 @@ def get_log_events(client, log_group_name, log_stream_name):
         startFromHead=True
     )
     print('Count of events: ' + str(len(response['events'])))
-    print('nextForwardToken: ' + response['nextForwardToken'])
-
     # 取得したイベントを返す
     yield response['events']
+
+    # nextForwardTokenがなければログイベントを最後まで取得した
+    if 'nextForwardToken' not in response:
+        return
+
+    #print('nextForwardToken: ' + response['nextForwardToken'])
 
     while True:
         # nextForwardTokenを取得
@@ -33,16 +37,16 @@ def get_log_events(client, log_group_name, log_stream_name):
             nextToken=prev_token
         )
         print('Count of events: ' + str(len(response['events'])))
-        print('nextForwardToken: ' + response['nextForwardToken'])
-
         # 取得したイベントを返す
         yield response['events']
 
-        # nextForwardTokenが前回と同じであればログイベントを最後まで取得した
-        if response['nextForwardToken'] == prev_token:
+        # nextForwardTokenがないか前回と同じであればログイベントを最後まで取得した
+        if 'nextForwardToken' not in response or response['nextForwardToken'] == prev_token:
             break
+        
+        #print('nextForwardToken: ' + response['nextForwardToken'])
 
-def retrieve_events(region, log_group, log_stream):
+def retrieve_events(region, log_group, log_stream, event_date_from, event_date_to):
     try:
         # ファイル名に使用できない文字を置換
         replaced_log_stream = re.sub('[\\/:*?"<>|]', '_', log_stream)
@@ -58,49 +62,66 @@ def retrieve_events(region, log_group, log_stream):
 
             # ログイベントを取得
             for events in get_log_events(client, log_group, log_stream):
+                for event in events:
+                    event_timestamp = datetime.fromtimestamp(event.get('timestamp')/1000)
+                    if event_timestamp < event_date_from:
+                        continue
+                    if event_date_to < event_timestamp:
+                        continue
 
-                # ログのタイムスタンプとメッセージを抽出
-                #messages = [datetime.fromtimestamp(event.get('timestamp')/1000).isoformat()
-                #            + '\t' + event.get('message') for event in events]
-                messages = [event.get('message') + '\n' for event in events]
-
-                # ファイル出力
-                f.writelines(messages)
+                    # ファイル出力
+                    f.write(event.get('message') + '\n')
 
     except Exception as e:
         traceback.print_exc()
 
 def main():
     """メインメソッド"""
-    # 引数定義
-    arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument(
-        '-r',
-        '--region',
-        metavar='REGION',
-        default='ap-northeast-1',
-        help='リージョンを指定する（デフォルト：ap-northeast-1）'
-    )
-    arg_parser.add_argument(
-        'log_group',
-        metavar='LOG_GROUP',
-        help='ロググループ名を指定する'
-    )
-    arg_parser.add_argument(
-        'log_stream',
-        metavar='LOG_STREAM',
-        help='ログストリーム名を指定する'
-    )
+    try:
+        # 引数定義
+        arg_parser = argparse.ArgumentParser()
+        arg_parser.add_argument(
+            '-r',
+            '--region',
+            metavar='REGION',
+            default='ap-northeast-1',
+            help='リージョンを指定する(デフォルト:ap-northeast-1)'
+        )
+        arg_parser.add_argument(
+            '--datefrom',
+            metavar='DATE_FROM',
+            default='',
+            help='ログダウンロード範囲(開始日時:yyyymmddhhmmss)(デフォルト:指定なし)'
+        )
+        arg_parser.add_argument(
+            '--dateto',
+            metavar='DATE_TO',
+            default='',
+            help='ログダウンロード範囲(終了日時:yyyymmddhhmmss)(デフォルト:指定なし)'
+        )
+        arg_parser.add_argument(
+            'log_group',
+            metavar='LOG_GROUP',
+            help='ロググループ名を指定する'
+        )
+        arg_parser.add_argument(
+            'log_stream',
+            metavar='LOG_STREAM',
+            help='ログストリーム名を指定する'
+        )
 
-    # 引数取得
-    args = arg_parser.parse_args()
-    region = args.region
-    log_group = args.log_group
-    log_stream = args.log_stream
+        # 引数取得
+        args = arg_parser.parse_args()
+        region = args.region
+        log_group = args.log_group
+        log_stream = args.log_stream
+        event_date_from = datetime.strptime(args.datefrom, '%Y%m%d%H%M%S') if args.datefrom != '' else datetime.min
+        event_date_to = datetime.strptime(args.dateto, '%Y%m%d%H%M%S') if args.dateto != '' else datetime.max
 
-    retrieve_events(region, log_group, log_stream)
+        retrieve_events(region, log_group, log_stream, event_date_from, event_date_to)
 
-
+    except Exception as e:
+        traceback.print_exc()
 
 
 if __name__ == '__main__':
